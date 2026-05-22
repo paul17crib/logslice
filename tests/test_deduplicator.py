@@ -101,3 +101,13 @@ def test_iter_deduplicated_is_iterator():
     import types
     gen = iter_deduplicated(["a", "b"])
     assert isinstance(gen, types.GeneratorType)
+
+
+def test_iter_deduplicated_single_element():
+    assert list(iter_deduplicated(["only"])) == ["only"]
+
+
+def test_iter_deduplicated_no_consecutive_duplicates():
+    """Lines that alternate should all be yielded unchanged."""
+    lines = ["a", "b", "a", "b", "a"]
+    assert list(iter_deduplicated(lines)) == ["a", "b", "a", "b", "a"]
