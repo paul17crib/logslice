@@ -35,6 +35,10 @@ def slice_log(
 
     Yields:
         Log lines within the specified time range.
+
+    Raises:
+        FileNotFoundError: If ``filepath`` does not exist.
+        ValueError: If ``start`` is later than ``end``.
     """
     if not os.path.isfile(filepath):
         raise FileNotFoundError(f"Log file not found: {filepath}")
@@ -79,7 +83,20 @@ def count_lines(
     end: datetime,
     encoding: str = 'utf-8',
 ) -> Tuple[int, Optional[datetime], Optional[datetime]]:
-    """Count matching lines and return first/last timestamps found."""
+    """Count matching lines and return first/last timestamps found.
+
+    Args:
+        filepath: Path to the log file.
+        start: Inclusive start datetime.
+        end: Inclusive end datetime.
+        encoding: File encoding.
+
+    Returns:
+        A tuple of ``(count, first_ts, last_ts)`` where *count* is the
+        number of lines yielded by :func:`slice_log`, and *first_ts* /
+        *last_ts* are the earliest and latest timestamps seen among those
+        lines (or ``None`` if no timestamped lines were found).
+    """
     count = 0
     first_ts: Optional[datetime] = None
     last_ts: Optional[datetime] = None
