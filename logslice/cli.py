@@ -71,8 +71,16 @@ def main(argv: Optional[list] = None) -> int:  # noqa: D401
     start_ts = parse_timestamp(args.start) if args.start else None
     end_ts = parse_timestamp(args.end) if args.end else None
 
-    with open(args.file, "r", encoding="utf-8", errors="replace") as fh:
-        raw_lines = list(fast_slice(fh, start=start_ts, end=end_ts))
+    if start_ts is not None and end_ts is not None and start_ts > end_ts:
+        parser.error(f"--start ({args.start}) must not be later than --end ({args.end})")
+
+    try:
+        with open(args.file, "r", encoding="utf-8", errors="replace") as fh:
+            raw_lines = list(fast_slice(fh, start=start_ts, end=end_ts))
+    except FileNotFoundError:
+        parser.error(f"File not found: {args.file}")
+    except OSError as exc:
+        parser.error(f"Could not open file: {exc}")
 
     # --- sampling -----------------------------------------------------------
     if args.sample_interval is not None:
@@ -90,12 +98,3 @@ def main(argv: Optional[list] = None) -> int:  # noqa: D401
 
     # --- stats --------------------------------------------------------------
     if args.stats:
-        stats = collect_stats(raw_lines, start_ts, end_ts)
-        reporter = get_reporter(args.stats)
-        sys.stderr.write(reporter(stats) + "\n")
-
-    return 0
-
-
-if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(main())
