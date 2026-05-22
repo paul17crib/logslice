@@ -10,6 +10,8 @@ from logslice.stats import SliceStats
 
 ReportFormat = Literal["text", "json"]
 
+VALID_FORMATS = ("text", "json")
+
 
 def report_text(stats: SliceStats, file: IO[str] = sys.stderr) -> None:
     """Write a brief human-readable summary to *file* (default: stderr)."""
@@ -36,9 +38,22 @@ def report_json(stats: SliceStats, file: IO[str] = sys.stderr) -> None:
 
 
 def get_reporter(fmt: ReportFormat):
-    """Return the reporter callable for the given format string."""
+    """Return the reporter callable for the given format string.
+
+    Parameters
+    ----------
+    fmt:
+        Output format; must be one of ``'text'`` or ``'json'``.
+
+    Raises
+    ------
+    ValueError
+        If *fmt* is not a recognised format string.
+    """
     if fmt == "json":
         return report_json
     if fmt == "text":
         return report_text
-    raise ValueError(f"Unknown report format: {fmt!r}. Choose 'text' or 'json'.")
+    raise ValueError(
+        f"Unknown report format: {fmt!r}. Choose one of: {', '.join(repr(f) for f in VALID_FORMATS)}."
+    )
