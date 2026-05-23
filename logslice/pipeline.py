@@ -1,85 +1,69 @@
-"""Pipeline: chain slice → deduplicate → highlight → format in one call."""
+"""Pipeline: compose multiple logslice transforms into a single pass."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Iterable
-
-from logslice.deduplicator import deduplicate, DedupeResult
-from logslice.formatter import get_formatter
-from logslice.highlighter import get_highlighter, HighlightResult
-from logslice.slicer import slice_log
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional
 
 
 @dataclass
 class PipelineResult:
-    """Aggregated result from a full pipeline run."""
+    """Holds the final lines and per-stage metadata collected during a run."""
 
-    formatted_lines: list[str]
-    dedupe: DedupeResult | None
-    highlight: HighlightResult | None
-    total_output_lines: int
+    lines: List[str]
+    stage_meta: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def total_lines(self) -> int:
+        return len(self.lines)
+
+
+# A stage is any callable that accepts an Iterable[str] and returns an
+# Iterable[str].  Stages may also return richer objects (e.g. RedactResult,
+# SampleResult) — in that case they must expose a `.lines` attribute.
+
+Stage = Callable[[Iterable[str]], Any]
+
+
+def _extract_lines(obj: Any) -> List[str]:
+    """Pull a plain list of strings out of a stage's return value."""
+    if isinstance(obj, list):
+        return obj
+    if hasattr(obj, "lines"):
+        return list(obj.lines)
+    # Assume it's a raw iterable
+    return list(obj)
 
 
 def run_pipeline(
-    log_path: str,
-    *,
-    start: datetime | None = None,
-    end: datetime | None = None,
-    # deduplication
-    dedupe: bool = False,
-    dedupe_consecutive: bool = False,
-    # highlighting
-    pattern: str | None = None,
-    highlight_mode: str = "plain",
-    case_sensitive: bool = False,
-    # formatting
-    fmt: str = "plain",
-    numbered: bool = False,
+    source: Iterable[str],
+    stages: List[Stage],
+    collect_meta: bool = False,
 ) -> PipelineResult:
-    """Run the full logslice pipeline on *log_path*.
+    """Run *source* through each stage in order.
 
-    Steps
-    -----
-    1. Slice the log file to the requested time range.
-    2. Optionally deduplicate lines.
-    3. Optionally highlight lines matching *pattern*.
-    4. Format the output with the chosen formatter.
+    Parameters
+    ----------
+    source:
+        Initial iterable of log lines.
+    stages:
+        Ordered list of transform callables.
+    collect_meta:
+        When *True*, store each stage's raw return value in
+        ``PipelineResult.stage_meta`` keyed by stage index.
+
+    Returns
+    -------
+    PipelineResult
+        Final lines after all stages have been applied.
     """
-    # 1. Slice
-    raw_lines: list[str] = list(slice_log(log_path, start=start, end=end))
+    current: Iterable[str] = source
+    meta: Dict[str, Any] = {}
 
-    # 2. Deduplicate
-    dedupe_result: DedupeResult | None = None
-    if dedupe or dedupe_consecutive:
-        dedupe_result = deduplicate(
-            raw_lines,
-            consecutive_only=dedupe_consecutive,
-        )
-        working_lines: list[str] = dedupe_result.lines
-    else:
-        working_lines = raw_lines
+    for idx, stage in enumerate(stages):
+        raw = stage(current)
+        if collect_meta:
+            meta[f"stage_{idx}"] = raw
+        current = _extract_lines(raw)
 
-    # 3. Highlight
-    highlight_result: HighlightResult | None = None
-    if pattern:
-        highlighter = get_highlighter(highlight_mode)
-        highlight_result = highlighter(
-            working_lines,
-            pattern=pattern,
-            case_sensitive=case_sensitive,
-        )
-        working_lines = highlight_result.lines
-
-    # 4. Format
-    formatter_name = "numbered" if numbered else fmt
-    formatter = get_formatter(formatter_name)
-    formatted: list[str] = list(formatter(working_lines))
-
-    return PipelineResult(
-        formatted_lines=formatted,
-        dedupe=dedupe_result,
-        highlight=highlight_result,
-        total_output_lines=len(formatted),
-    )
+    return PipelineResult(lines=list(current), stage_meta=meta)
