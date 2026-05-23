@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -23,7 +23,6 @@ def large_log(tmp_path: Path) -> str:
     lines = []
     base = datetime(2024, 6, 1, 0, 0, 0)
     for i in range(2000):
-        from datetime import timedelta
         ts = (base + timedelta(seconds=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
         lines.append(f"{ts} INFO  event {i}\n")
     p.write_text("".join(lines), encoding="utf-8")
@@ -61,3 +60,16 @@ def test_index_entries_cover_expected_range(large_log):
     last_ts = idx.entries[-1][1]
     assert first_ts < last_ts
     assert first_ts >= _dt("2024-06-01T00:00:00Z")
+
+
+def test_fast_slice_boundary_returns_no_results(large_log):
+    """A time range entirely outside the log should yield no lines."""
+    start = _dt("2025-01-01T00:00:00Z")
+    end = _dt("2025-01-01T01:00:00Z")
+
+    idx = build_index(large_log, sample_every=50)
+    indexed_result = list(fast_slice(large_log, start=start, end=end, index=idx))
+    reference_result = list(slice_log(large_log, start=start, end=end))
+
+    assert indexed_result == []
+    assert indexed_result == reference_result
