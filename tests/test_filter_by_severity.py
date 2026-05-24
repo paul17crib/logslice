@@ -75,6 +75,17 @@ def test_filter_invalid_level_raises():
         filter_by_severity(SAMPLE, min_level="BOGUS")
 
 
+def test_filter_invalid_max_level_raises():
+    with pytest.raises(ValueError, match="Unknown severity"):
+        filter_by_severity(SAMPLE, max_level="BOGUS")
+
+
+def test_filter_min_greater_than_max_raises():
+    """min_level higher than max_level should raise a ValueError."""
+    with pytest.raises(ValueError):
+        filter_by_severity(SAMPLE, min_level="CRITICAL", max_level="DEBUG")
+
+
 def test_iter_filter_by_severity_yields_strings():
     gen = iter_filter_by_severity(["ERROR something", "INFO ok"], min_level="ERROR")
     results = list(gen)
